@@ -50,12 +50,10 @@ def agrupar_usuarios_por_tokens(nombre_coleccion='usuarios'):
         return defaultdict(list)
 
 
-# --- NUEVA FUNCIÓN: EXPORTAR A EXCEL ---
-
 def exportar_a_excel(grupos, nombre_archivo='reporte_tokens.xlsx'):
     """
-    Guarda los datos de conteo en una nueva fila de un archivo de Excel.
-    Si el archivo no existe, lo crea.
+    Guarda los datos de conteo en una nueva fila de un archivo de Excel,
+    añadiendo una columna final con el total de usuarios procesados.
     
     Args:
         grupos (defaultdict): Diccionario de agrupaciones (tokens: [usuarios]).
@@ -65,38 +63,46 @@ def exportar_a_excel(grupos, nombre_archivo='reporte_tokens.xlsx'):
     # 1. Preparar la fila de datos
     fecha_actual = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     
-    # Encontrar todos los valores de tokens únicos
+    # Encontrar todos los valores de tokens únicos y ordenarlos
     valores_tokens_existentes = sorted(grupos.keys())
     
-    # Cabeceras y Valores
     columnas = ['Fecha y Hora']
     valores = [fecha_actual]
+    total_usuarios_procesados = 0
     
+    # Llenar columnas y valores para cada grupo de tokens
     for tokens in valores_tokens_existentes:
+        conteo = len(grupos[tokens])
         columnas.append(f"{tokens} Tokens")
-        valores.append(len(grupos[tokens]))
+        valores.append(conteo)
+        total_usuarios_procesados += conteo # Acumular el total
         
+    # 2. Agregar la nueva columna de TOTAL al final
+    columnas.append("Total Usuarios")
+    valores.append(total_usuarios_procesados)
+    
     # Crear la nueva fila de datos (como una Serie de Pandas)
     nueva_fila = pd.Series(valores, index=columnas)
 
-    # 2. Lógica para manejar el archivo existente/nuevo
+    # 3. Lógica para manejar el archivo existente/nuevo
     
     if os.path.exists(nombre_archivo):
         # El archivo existe: Cargar el contenido, añadir la fila y guardar
         try:
+            # Necesitamos leer solo la cabecera (header=0)
             df_existente = pd.read_excel(nombre_archivo)
             
-            # Verificar si las columnas son consistentes
-            # Si un nuevo token aparece (ej. 100 Tokens), la cabecera cambiará.
-            
-            # La forma más segura de agregar es usando concat
+            # Usar pd.concat para agregar la nueva fila. Pandas maneja automáticamente
+            # si hay columnas nuevas (aunque en este caso, "Total Usuarios" siempre será nuevo
+            # para los archivos antiguos, pero estará en la cabecera para los nuevos).
             df_nuevo = pd.DataFrame([nueva_fila])
             df_final = pd.concat([df_existente, df_nuevo], ignore_index=True)
             
-            print(f"✏️ Agregando nueva fila al archivo existente...")
+            print(f"✏️ Agregando nueva fila con Total={total_usuarios_procesados} al archivo existente...")
             
         except Exception as e:
-            print(f"❌ Error al leer o procesar el archivo Excel existente: {e}. Creando uno nuevo.")
+            # Si hay un error al leer el archivo (por ej., dañado), creamos uno nuevo
+            print(f"❌ Error al leer el archivo Excel existente: {e}. Creando uno nuevo.")
             df_final = pd.DataFrame([nueva_fila])
             
     else:
@@ -104,9 +110,8 @@ def exportar_a_excel(grupos, nombre_archivo='reporte_tokens.xlsx'):
         df_final = pd.DataFrame([nueva_fila])
         print(f"➕ Creando nuevo archivo Excel: {nombre_archivo}")
         
-    # 3. Guardar el DataFrame final al archivo Excel
+    # 4. Guardar el DataFrame final al archivo Excel
     try:
-        # Usamos engine='openpyxl' para compatibilidad moderna
         df_final.to_excel(nombre_archivo, index=False, engine='openpyxl')
         print(f"✔️ Archivo '{nombre_archivo}' actualizado correctamente.")
     except Exception as e:
